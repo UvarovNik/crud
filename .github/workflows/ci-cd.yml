@@ -72,23 +72,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no -p 22 vylarrja@${{ secrets.SERVER_HOST }} << 'ENDSSH'
-            cd /home/vylarrja
-            if [ -d crud/.git ]; then
-              cd crud
-              git fetch origin main
-              git reset --hard origin/main
-            else
-              git clone git@github.com:UvarovNik/crud.git
-              cd crud
-            fi
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no vylarrja@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            cd /home/vylarrja/crud
+            git fetch origin main
+            git reset --hard origin/main
             source venv/bin/activate
             pip install -r requirements.txt
             python manage.py collectstatic --noinput
