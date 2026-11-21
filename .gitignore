@@ -1,3 +1,7 @@
 /.idea/
 /.gigaide/
 /.venv/
+/.gigacode/
+url.txt
+.env
+.github/
