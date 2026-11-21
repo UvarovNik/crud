@@ -80,9 +80,15 @@ jobs:
       - name: Deploy via SSH
         run: |
           ssh -o StrictHostKeyChecking=no -p 22 vylarrja@${{ secrets.SERVER_HOST }} << 'ENDSSH'
-            cd /home/vylarrja/crud
-            git fetch origin main
-            git reset --hard origin/main
+            cd /home/vylarrja
+            if [ -d crud/.git ]; then
+              cd crud
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              git clone git@github.com:UvarovNik/crud.git
+              cd crud
+            fi
             source venv/bin/activate
             pip install -r requirements.txt
             python manage.py collectstatic --noinput
