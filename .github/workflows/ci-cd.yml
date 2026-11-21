@@ -82,7 +82,7 @@ jobs:
       - name: Deploy via SSH
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no vylarrja@${{ secrets.SERVER_HOST }} << 'ENDSSH'
-            cd /home/vylarrja/crud
+            cd /home/vylarrja/crud/stocks_products
             git fetch origin main
             git reset --hard origin/main
             source venv/bin/activate

@@ -7,10 +7,8 @@
 set -e
 
 SERVER_USER="${1:-vylarrja}"
-PROJECT_DIR="/home/${SERVER_USER}/crud"
+PROJECT_DIR="/home/${SERVER_USER}/crud/stocks_products"
 REPO_URL="git@github.com:UvarovNik/crud.git"
-DB_NAME="stocks_db"
-DB_USER="stocks_user"
 DB_PASS="$(openssl rand -base64 16)"
 SECRET_KEY="$(python3 -c "import secrets; print('django-insecure-' + secrets.token_urlsafe(50))")"
 
@@ -29,21 +27,21 @@ apt install -y python3 python3-pip python3-venv \
     gcc
 
 echo "=== Configuring PostgreSQL ==="
-su - postgres -c "psql -c \"CREATE DATABASE ${DB_NAME};\"" 2>/dev/null || true
-su - postgres -c "psql -c \"DO \\\$\\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${DB_USER}') THEN CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}'; END IF; END \\\$\\\$;\""
-su - postgres -c "psql -c \"ALTER ROLE ${DB_USER} SET client_encoding TO 'utf8';\""
-su - postgres -c "psql -c \"ALTER ROLE ${DB_USER} SET default_transaction_isolation TO 'read committed';\""
-su - postgres -c "psql -c \"ALTER ROLE ${DB_USER} SET timezone TO 'UTC';\""
-su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};\""
+su - postgres -c "psql -c \"CREATE DATABASE stocks_db;\"" 2>/dev/null || true
+su - postgres -c "psql -c \"DO \\\$\\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'stocks_user') THEN CREATE USER stocks_user WITH PASSWORD '${DB_PASS}'; END IF; END \\\$\\\$;\""
+su - postgres -c "psql -c \"ALTER ROLE stocks_user SET client_encoding TO 'utf8';\""
+su - postgres -c "psql -c \"ALTER ROLE stocks_user SET default_transaction_isolation TO 'read committed';\""
+su - postgres -c "psql -c \"ALTER ROLE stocks_user SET timezone TO 'UTC';\""
+su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE stocks_db TO stocks_user;\""
 
 echo "=== Setting up project directory ==="
 cd /home/${SERVER_USER}
-if [ -d crud ]; then
-    cd crud && git fetch origin && git reset --hard origin/main
+if [ -d crud/.git ]; then
+    cd crud && git fetch origin main && git reset --hard origin/main
 else
     git clone ${REPO_URL} crud
 fi
-cd crud
+cd stocks_products
 
 echo "=== Creating virtual environment ==="
 python3 -m venv venv
@@ -56,7 +54,7 @@ cat > .env << EOF
 SECRET_KEY=${SECRET_KEY}
 DEBUG=False
 ALLOWED_HOSTS=194.113.34.240
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}
+DATABASE_URL=postgresql://stocks_user:${DB_PASS}@localhost:5432/stocks_db
 EOF
 chmod 600 .env
 
@@ -74,7 +72,7 @@ After=network.target
 User=${SERVER_USER}
 Group=www-data
 WorkingDirectory=${PROJECT_DIR}
-Environment=PYTHONPATH=${PROJECT_DIR}/stocks_products
+Environment=PYTHONPATH=${PROJECT_DIR}
 ExecStart=${PROJECT_DIR}/venv/bin/gunicorn --access-logfile - --error-logfile - --workers 3 --bind unix:${PROJECT_DIR}/gunicorn.sock stocks_products.wsgi:application
 Restart=on-failure
 RestartSec=5
@@ -97,7 +95,7 @@ server {
     add_header X-Content-Type-Options \"nosniff\" always;
 
     location /static/ {
-        alias ${PROJECT_DIR}/stocks_products/staticfiles/;
+        alias ${PROJECT_DIR}/staticfiles/;
     }
 
     location / {
@@ -111,8 +109,8 @@ server {
 }
 EOF"
 
-sudo ln -sf /etc/nginx/sites-available/stocks_products /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/stocks_products /etc/nginx/sites-enabled/stocks_products
+sudo rm -f /etc/nginx/sites-enabled/crud /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
