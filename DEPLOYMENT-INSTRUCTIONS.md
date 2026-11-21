@@ -83,3 +83,4 @@ cat ~/.ssh/stocks_products_deploy.pub
 ssh vylarrja@194.113.34.240 "mkdir -p ~/.ssh && chmod 700 ~/.ssh"
 ssh vylarrja@194.113.34.240 "echo 'ssh-ed25519 AAAA...' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
+# CI/CD Test
