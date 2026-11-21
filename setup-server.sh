@@ -7,6 +7,7 @@
 set -e
 
 SERVER_USER="${1:-vylarrja}"
+PROJECT_DIR="/home/${SERVER_USER}/crud"
 REPO_URL="git@github.com:UvarovNik/crud.git"
 DB_NAME="stocks_db"
 DB_USER="stocks_user"
@@ -35,31 +36,36 @@ su - postgres -c "psql -c \"ALTER ROLE ${DB_USER} SET default_transaction_isolat
 su - postgres -c "psql -c \"ALTER ROLE ${DB_USER} SET timezone TO 'UTC';\""
 su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};\""
 
-echo "=== Setting up application directory ==="
-mkdir -p /opt/stocks_products
-chown ${SERVER_USER}:${SERVER_USER} /opt/stocks_products
-
-echo "=== Cloning repository ==="
-su - ${SERVER_USER} -c "cd /opt/stocks_products && git clone ${REPO_URL} . 2>/dev/null || cd /opt/stocks_products && git fetch origin && git reset --hard origin/main"
+echo "=== Setting up project directory ==="
+cd /home/${SERVER_USER}
+if [ -d crud ]; then
+    cd crud && git fetch origin && git reset --hard origin/main
+else
+    git clone ${REPO_URL} crud
+fi
+cd crud
 
 echo "=== Creating virtual environment ==="
-su - ${SERVER_USER} -c "cd /opt/stocks_products && python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt"
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 
 echo "=== Creating .env file ==="
-cat > /opt/stocks_products/.env << EOF
+cat > .env << EOF
 SECRET_KEY=${SECRET_KEY}
 DEBUG=False
 ALLOWED_HOSTS=194.113.34.240
 DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}
 EOF
-chmod 600 /opt/stocks_products/.env
-chown ${SERVER_USER}:${SERVER_USER} /opt/stocks_products/.env
+chmod 600 .env
 
 echo "=== Running migrations and collecting static ==="
-su - ${SERVER_USER} -c "cd /opt/stocks_products && source venv/bin/activate && python manage.py migrate && python manage.py collectstatic --noinput"
+python manage.py migrate
+python manage.py collectstatic --noinput
 
 echo "=== Creating Gunicorn systemd service ==="
-cat > /etc/systemd/system/gunicorn.service << EOF
+sudo bash -c "cat > /etc/systemd/system/gunicorn.service << EOF
 [Unit]
 Description=Gunicorn daemon for stocks_products
 After=network.target
@@ -67,45 +73,43 @@ After=network.target
 [Service]
 User=${SERVER_USER}
 Group=www-data
-WorkingDirectory=/opt/stocks_products
-ExecStart=/opt/stocks_products/venv/bin/gunicorn \
-    --access-logfile - --error-logfile - \
-    --workers 3 --bind 127.0.0.1:8000 \
-    stocks_products.wsgi:application
+WorkingDirectory=${PROJECT_DIR}
+Environment=PYTHONPATH=${PROJECT_DIR}/stocks_products
+ExecStart=${PROJECT_DIR}/venv/bin/gunicorn --access-logfile - --error-logfile - --workers 3 --bind unix:${PROJECT_DIR}/gunicorn.sock stocks_products.wsgi:application
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF"
 
 sudo systemctl daemon-reload
 sudo systemctl enable gunicorn
 sudo systemctl start gunicorn
 
 echo "=== Configuring Nginx ==="
-cat > /etc/nginx/sites-available/stocks_products << 'EOF'
+sudo bash -c "cat > /etc/nginx/sites-available/stocks_products << 'EOF'
 server {
     listen 80;
     server_name 194.113.34.240;
 
-    add_header X-Frame-Options "DENY" always;
-    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options \"DENY\" always;
+    add_header X-Content-Type-Options \"nosniff\" always;
 
     location /static/ {
-        alias /opt/stocks_products/staticfiles/;
+        alias ${PROJECT_DIR}/stocks_products/staticfiles/;
     }
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://unix:${PROJECT_DIR}/gunicorn.sock;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_redirect off;
     }
 }
-EOF
+EOF"
 
 sudo ln -sf /etc/nginx/sites-available/stocks_products /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
