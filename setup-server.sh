@@ -11,7 +11,7 @@ REPO_URL="git@github.com:UvarovNik/crud.git"
 DB_NAME="stocks_db"
 DB_USER="stocks_user"
 DB_PASS="$(openssl rand -base64 16)"
-SECRET_KEY="$(python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())")"
+SECRET_KEY="$(python3 -c "import secrets; print('django-insecure-' + secrets.token_urlsafe(50))")"
 
 echo "=== Updating system ==="
 apt update && apt upgrade -y
