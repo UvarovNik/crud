@@ -6,7 +6,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False)
 )
-env.read_env(BASE_DIR / '.env')
+# Try multiple locations for .env
+_env_path = BASE_DIR / '.env'
+if not _env_path.exists():
+    _env_path = BASE_DIR.parent / '.env'
+if not _env_path.exists():
+    _env_path = BASE_DIR.parent.parent / '.env'
+env.read_env(_env_path)
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
