@@ -72,13 +72,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no -p 22 vylarrja@${{ secrets.SERVER_HOST }} << 'ENDSSH'
             cd /home/vylarrja/crud
             git fetch origin main
             git reset --hard origin/main
@@ -87,3 +88,4 @@ jobs:
             python manage.py collectstatic --noinput
             python manage.py migrate
             sudo systemctl restart gunicorn
+          ENDSSH
