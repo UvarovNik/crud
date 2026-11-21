@@ -85,3 +85,4 @@ ssh vylarrja@194.113.34.240 "echo 'ssh-ed25519 AAAA...' >> ~/.ssh/authorized_key
 ```
 # CI/CD Test
 # deploy key fixed
+# deploy key added to server
